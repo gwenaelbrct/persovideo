@@ -1,0 +1,88 @@
+name: Vidéo du jour
+
+on:
+  schedule:
+    # 17h30 heure de Paris : 15:30 UTC en été, 16:30 UTC en hiver (le script ignore le mauvais créneau)
+    - cron: "30 15 * * *"
+    - cron: "30 16 * * *"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publier sur les réseaux (sinon : génération seule)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-video
+
+jobs:
+  video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Vérifier l'heure de Paris et éviter les doublons
+        id: gate
+        run: |
+          TODAY=$(TZ=Europe/Paris date +%F)
+          HOUR=$(TZ=Europe/Paris date +%H)
+          echo "today=$TODAY" >> "$GITHUB_OUTPUT"
+          if grep -q "^$TODAY" published.log 2>/dev/null; then
+            echo "Déjà publié aujourd'hui"; echo "go=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "${{ github.event_name }}" = "schedule" ] && { [ "$HOUR" -lt 17 ] || [ "$HOUR" -ge 21 ]; }; then
+            echo "Mauvais créneau horaire ($HOUR h à Paris)"; echo "go=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "go=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@v5
+        if: steps.gate.outputs.go == 'true'
+        with:
+          python-version: "3.12"
+
+      - name: Installer les dépendances
+        if: steps.gate.outputs.go == 'true'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+          pip install -q -r requirements.txt
+
+      - name: Générer la vidéo
+        if: steps.gate.outputs.go == 'true'
+        run: python daily.py --date ${{ steps.gate.outputs.today }}
+
+      - uses: actions/upload-artifact@v4
+        if: steps.gate.outputs.go == 'true'
+        with:
+          name: video-${{ steps.gate.outputs.today }}
+          path: out/${{ steps.gate.outputs.today }}
+          retention-days: 14
+
+      - name: Attendre 18h00 (heure de Paris)
+        if: steps.gate.outputs.go == 'true' && github.event_name == 'schedule'
+        run: |
+          NOW=$(date +%s); TARGET=$(TZ=Europe/Paris date -d "today 18:00" +%s)
+          if [ "$TARGET" -gt "$NOW" ]; then echo "Attente $((TARGET-NOW)) s"; sleep $((TARGET-NOW)); fi
+
+      - name: Publier
+        if: steps.gate.outputs.go == 'true' && (github.event_name == 'schedule' || inputs.publish)
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+        run: python publish.py out/${{ steps.gate.outputs.today }}
+
+      - name: Journal (garde aussi le dépôt actif)
+        if: steps.gate.outputs.go == 'true' && github.event_name == 'schedule'
+        run: |
+          python -c "import json;m=json.load(open('out/${{ steps.gate.outputs.today }}/meta.json'));print(m['date'],m['template'],m['options'],m['title'],sep=' | ')" >> published.log
+          git config user.name "daily-video-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add published.log && git commit -m "Vidéo du ${{ steps.gate.outputs.today }}" && git push
