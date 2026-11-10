@@ -1,4 +1,4 @@
-"""Template « expérience » : course entre deux tours à creuser.
+"""Template « expérience » : course entre 2 à 4 tours à creuser.
 
 Chaque côté a une règle appliquée quand une bille touche l'étage courant.
 Chaque bille inflige des dégâts = nombre de billes qu'elle représente.
@@ -19,19 +19,37 @@ CAP = 140            # billes réellement simulées par côté (au-delà, une bi
 EXPERIMENTS = {
     "x2_vs_half": dict(
         title="×2 vs ÷2", question="WHO REACHES THE BOTTOM FIRST?",
-        left=dict(start=1, rule="double", label="1 BALL", sub="×2 ON EVERY HIT", hue=0.52),
-        right=dict(start=10_000_000, rule="half", label="10M BALLS", sub="÷2 ON EVERY HIT", hue=0.93),
+        lanes=[dict(start=1, rule="double", sub="×2 ON EVERY HIT", hue=0.52),
+               dict(start=10_000_000, rule="half", sub="÷2 ON EVERY HIT", hue=0.93)],
         floors=[10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000, 50_000_000]),
     "plus1_vs_x2": dict(
         title="+1 vs ×2", question="CAN +1 BEAT ×2 WITH A HEAD START?",
-        left=dict(start=50, rule="plus1", label="50 BALLS", sub="+1 ON EVERY HIT", hue=0.12),
-        right=dict(start=1, rule="double", label="1 BALL", sub="×2 ON EVERY HIT", hue=0.55),
+        lanes=[dict(start=50, rule="plus1", sub="+1 ON EVERY HIT", hue=0.12),
+               dict(start=1, rule="double", sub="×2 ON EVERY HIT", hue=0.55)],
         floors=[10, 100, 1_000, 5_000, 20_000, 100_000, 500_000]),
     "x3_fragile_vs_x2": dict(
         title="×3 (dies 50%) vs ×2", question="RISKY ×3 OR SAFE ×2?",
-        left=dict(start=1, rule="triple_fragile", label="1 BALL", sub="×3 BUT 50% DIE", hue=0.30),
-        right=dict(start=1, rule="double", label="1 BALL", sub="×2 ON EVERY HIT", hue=0.80),
+        lanes=[dict(start=1, rule="triple_fragile", sub="×3 BUT 50% DIE", hue=0.30),
+               dict(start=1, rule="double", sub="×2 ON EVERY HIT", hue=0.80)],
         floors=[10, 100, 1_000, 10_000, 100_000, 1_000_000]),
+    "battle_royale": dict(
+        title="4 RULES, 1 WINNER", question="WHICH RULE WINS THE RACE?",
+        lanes=[dict(start=100, rule="plus1", sub="+1 / HIT", hue=0.12),
+               dict(start=1, rule="double", sub="×2 / HIT", hue=0.55),
+               dict(start=1, rule="triple_fragile", sub="×3 · 50% DIE", hue=0.30),
+               dict(start=1_000_000, rule="half", sub="÷2 / HIT", hue=0.93)],
+        floors=[10, 100, 1_000, 10_000, 100_000, 1_000_000, 5_000_000]),
+    "risk_ladder": dict(
+        title="HOW MUCH RISK?", question="SAFE ×2, ×3 OR ×4?",
+        lanes=[dict(start=1, rule="double", sub="×2 · SAFE", hue=0.55),
+               dict(start=1, rule="triple_fragile", sub="×3 · 50% DIE", hue=0.12),
+               dict(start=1, rule="quad_fragile", sub="×4 · 75% DIE", hue=0.95)],
+        floors=[10, 100, 1_000, 10_000, 100_000, 1_000_000]),
+    "plus10_vs_x15": dict(
+        title="+10 vs ×1.5", question="SLOW AND STEADY OR EXPONENTIAL?",
+        lanes=[dict(start=100, rule="plus10", sub="+10 ON EVERY HIT", hue=0.08),
+               dict(start=1, rule="x1_5", sub="×1.5 ON EVERY HIT", hue=0.62)],
+        floors=[10, 100, 1_000, 5_000, 20_000, 100_000, 500_000]),
 }
 
 
@@ -160,10 +178,22 @@ class Side:
                 self.add(hit[:k])
             if len(hit) > k:
                 self.w += (len(hit) - k) / len(self.w)
-        elif rule == "triple_fragile":
-            alive = rng.random(len(hit)) >= 0.5
+        elif rule in ("plus10",):
+            n_add = 10 * len(hit)
+            room = CAP - len(self.pos)
+            k = min(room, n_add)
+            if k > 0:
+                self.add(np.resize(hit, k))
+            if n_add > k:
+                self.w += (n_add - k) / len(self.w)
+        elif rule == "x1_5":
+            lucky = hit[rng.random(len(hit)) < 0.5]
+            self.multiply(lucky, 2)
+        elif rule in ("triple_fragile", "quad_fragile"):
+            k_mul, p_die = (3, 0.5) if rule == "triple_fragile" else (4, 0.75)
+            alive = rng.random(len(hit)) >= p_die
             dead_idx = hit[~alive]
-            self.multiply(hit[alive], 3)
+            self.multiply(hit[alive], k_mul)
             mask = np.ones(len(self.pos), bool); mask[dead_idx] = False
             if mask.sum() == 0:
                 mask[dead_idx[0]] = True   # on garde toujours au moins une bille
@@ -208,26 +238,32 @@ def simulate(seed, duration, scale, hpmul, render=None):
     fstart = 880 * S
     fh = (fbot - fstart) / n_fl
     ftops = [fstart + i * fh for i in range(n_fl)]
-    L = Side(EXP["left"], 50 * S, 520 * S, top, ftops, fh, S, np.random.default_rng(seed * 7 + 1), hpmul)
-    R = Side(EXP["right"], 560 * S, 1030 * S, top, ftops, fh, S, np.random.default_rng(seed * 7 + 2), hpmul)
+    lanes = EXP["lanes"]
+    nl = len(lanes)
+    gap = 40 * S if nl == 2 else 26 * S
+    lw = (980 * S - gap * (nl - 1)) / nl
+    sides = [Side(cfg, 50 * S + i * (lw + gap), 50 * S + i * (lw + gap) + lw, top, ftops, fh, S,
+                  np.random.default_rng(seed * 7 + 1 + i), hpmul) for i, cfg in enumerate(lanes)]
     g = 2000 * S
     dt = 1 / (FPS * SUB)
     n_frames = int(duration * FPS)
     winner, win_t = None, None
     for fi in range(n_frames):
         t = fi / FPS
-        L.hits_this_frame = R.hits_this_frame = 0
+        for sd in sides:
+            sd.hits_this_frame = 0
         for _ in range(SUB):
-            L.step(dt, g, t); R.step(dt, g, t)
+            for sd in sides:
+                sd.step(dt, g, t)
         if winner is None:
-            for side, name in ((L, "left"), (R, "right")):
+            for i, side in enumerate(sides):
                 if side.finished_at is not None:
-                    winner, win_t = name, side.finished_at
+                    winner, win_t = i, side.finished_at
                     break
             if winner is None and render is None and t > duration:
                 break
         if render is not None:
-            render(fi, t, L, R, winner, win_t)
+            render(fi, t, sides, winner, win_t)
         elif winner is not None:
             return win_t, winner
     return win_t, winner
@@ -268,16 +304,18 @@ def main():
     W, H = int(1080 * S), int(1920 * S)
     bg = gradient_bg(W, H, (8, 6, 22), (20, 8, 40))
     fb = lambda px: ImageFont.truetype(FONT, int(px * S))
-    f_title, f_q, f_cnt, f_lab, f_sub, f_hp, f_win = fb(92), fb(38), fb(84), fb(36), fb(28), fb(40), fb(64)
+    nl = len(EXP["lanes"])
+    k_ = {2: 1.0, 3: 0.72, 4: 0.56}[nl]
+    f_title, f_q, f_cnt, f_lab, f_sub, f_hp, f_win = fb(92), fb(38), fb(84 * k_), fb(36 * max(k_, .7)), fb(28 * max(k_, .75)), fb(40 * max(k_, .7)), fb(64)
     enc = Encoder(a.out, W, H)
     mx = Mixer(a.duration, root=110.0)
     rng = np.random.default_rng(a.seed + 99)
     sprites = {}
     shake = [0.0]
-    last_note = {"left": -1.0, "right": -1.0}
-    note_idx = {"left": 0, "right": 3}
-    state = {"lb": 0, "rb": 0, "won": False}
-    hues = {"left": EXP["left"]["hue"], "right": EXP["right"]["hue"]}
+    last_note = [-1.0] * nl
+    note_idx = [3 * i for i in range(nl)]
+    state = {"breaks": [0] * nl, "won": False}
+    hues = [l["hue"] for l in EXP["lanes"]]
 
     def draw_side(dr, img, side, name, t):
         hue = hues[name]
@@ -328,18 +366,18 @@ def main():
             tw = dr.textlength(txt, font=f)
             dr.text((cx - tw / 2, y), txt, font=f, fill=(255, 255, 255, a_))
 
-    def render(fi, t, L, R, winner, win_t):
+    def render(fi, t, sides, winner, win_t):
         # sons
-        for side, name in ((L, "left"), (R, "right")):
+        for name, side in enumerate(sides):
             if side.hits_this_frame and t - last_note[name] > 0.09:
                 note_idx[name] += 1
                 f = mx.scale_freq(note_idx[name] + 2 * side.level, octaves=2)
                 mx.add(t, mx.note(f), 0.22 + 0.05 * min(side.hits_this_frame, 4))
                 last_note[name] = t
-        for side, k in ((L, "lb"), (R, "rb")):
-            while len(side.breaks) > state[k]:
-                mx.add(side.breaks[state[k]], mx.boom(), 0.3)
-                state[k] += 1
+        for k, side in enumerate(sides):
+            while len(side.breaks) > state["breaks"][k]:
+                mx.add(side.breaks[state["breaks"][k]], mx.boom(), 0.3 / max(1, nl - 1) ** 0.5)
+                state["breaks"][k] += 1
                 shake[0] = 0.6
         if winner and not state["won"]:
             state["won"] = True
@@ -347,8 +385,8 @@ def main():
                 mx.add(t + 0.09 * j, mx.note(mx.root * 2 * 2 ** (semi / 12)), 0.5)
         scene = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         dr = ImageDraw.Draw(scene, "RGBA")
-        draw_side(dr, scene, L, "left", t)
-        draw_side(dr, scene, R, "right", t)
+        for i, sd in enumerate(sides):
+            draw_side(dr, scene, sd, i, t)
         # titre
         tw = dr.textlength(EXP["title"], font=f_title)
         dr.text(((W - tw) / 2, 70 * S), EXP["title"], font=f_title, fill=(255, 255, 255, 255))
@@ -356,11 +394,11 @@ def main():
         tw = dr.textlength(q, font=f_q)
         dr.text(((W - tw) / 2, 185 * S), q, font=f_q, fill=(255, 220, 120, 230))
         # gagnant
-        if winner:
-            side = L if winner == "left" else R
+        if winner is not None:
+            side = sides[winner]
             cx = (side.x0 + side.x1) / 2
             pulse = 1 + 0.05 * math.sin((t - win_t) * 8)
-            fw = ImageFont.truetype(FONT, int(64 * S * pulse))
+            fw = ImageFont.truetype(FONT, int(64 * S * pulse * (1 if nl == 2 else 0.62)))
             tw = dr.textlength("WINNER!", font=fw)
             dr.rounded_rectangle([cx - tw / 2 - 20 * S, 1080 * S, cx + tw / 2 + 20 * S, 1180 * S], 20 * S, fill=(255, 210, 60, 240))
             dr.text((cx - tw / 2, 1092 * S), "WINNER!", font=fw, fill=(30, 10, 40, 255))
@@ -373,12 +411,13 @@ def main():
         img.paste(scene, (int(dx), int(dy)), scene)
         enc.frame(img.convert("RGB"))
         if fi % 300 == 0:
-            print(f"frame {fi}  L={fmt(L.count)} lvl{L.level}  R={fmt(R.count)} lvl{R.level}", flush=True)
+            print(f"frame {fi}  " + "  ".join(f"{fmt(sd.count)} lvl{sd.level}" for sd in sides), flush=True)
 
     win_t, winner = simulate(a.seed, a.duration, a.scale, hpmul, render=render)
     mx.pad([55.0, 82.4])
     enc.finish(mx, a.duration)
     print("OK", a.out, "winner:", winner, "at", win_t)
+    return winner, win_t
 
 
 if __name__ == "__main__":

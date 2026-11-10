@@ -15,10 +15,10 @@ PALETTES = [
 ]
 
 
-def run(seed, duration, scale, out, cap=360):
+def run(seed, duration, scale, out, cap=360, walls=None):
     rng = np.random.default_rng(seed)
     pal = PALETTES[seed % len(PALETTES)]
-    four = bool(seed % 2)                      # 2 murs (gauche/droite) ou 4 murs
+    four = bool(seed % 2) if walls is None else walls == 4   # 2 murs (gauche/droite) ou 4 murs
     S = scale
     W, H = int(1080 * S), int(1920 * S)
     cx, cy = W / 2, H * 0.56

@@ -1,50 +1,17 @@
-"""Génère la vidéo du jour + titre/description/hashtags + couverture.
+"""Génère la vidéo du jour (1 concept parmi 30, jamais le même sur 30 jours) + textes + couverture.
 
 Usage: python3 daily.py [--date 2026-11-11] [--scale 1.0]
 Sortie: out/<date>/video.mp4, cover.jpg, meta.json
 """
 import argparse, datetime as dtm, json, os, random, subprocess, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
-# Rotation : un template par jour, dans cet ordre, en boucle
-ROTATION = [
-    ("wheel", {}),
-    ("race", {"exp": "x2_vs_half"}),
-    ("walls", {}),
-    ("race", {"exp": "plus1_vs_x2"}),
-    ("wheel", {}),
-    ("race", {"exp": "x3_fragile_vs_x2"}),
-    ("walls", {}),
-]
+from concepts import CONCEPTS, concept_for_day, render
 
-META = {
-    "wheel": dict(
-        titles=["1 ball enters the black hole… then THIS happens 🕳️", "Every ball that touches the black hole DOUBLES",
-                "Can 1 ball fill the entire wheel? 🤯", "Black hole doubles every ball… wait for the end",
-                "The most satisfying black hole you'll see today"],
-        cover=["WILL IT FILL\nTHE WHEEL?", "1 BALL →\n350 BALLS?", "BLACK HOLE\nDOUBLES ALL"],
-        desc="Each time a ball falls into the black hole, it comes out as TWO. How long until the wheel is full? 🕳️\n"
-             "Chaque bille qui touche le trou noir se dédouble. Combien de temps pour remplir la roue ?",
-        tags=["#satisfying", "#oddlysatisfying", "#physics", "#simulation", "#blackhole", "#marblerace", "#asmr", "#satisfyingvideo"]),
-    "walls": dict(
-        titles=["Every ball crushed by the walls DOUBLES 😳", "The walls are closing in… and the balls multiply",
-                "Crushed = doubled. How many by the end?", "This ends way more chaotic than you think",
-                "Satisfying wall crusher doubling simulation"],
-        cover=["CRUSHED\n= DOUBLED", "THE WALLS\nARE CLOSING", "HOW MANY\nAT THE END?"],
-        desc="Every ball squeezed by a moving wall turns into two. Guess the final number before the end! 🧱\n"
-             "Chaque bille écrasée par un mur se dédouble. Devine le nombre final !",
-        tags=["#satisfying", "#oddlysatisfying", "#physics", "#simulation", "#asmr", "#satisfyingvideo", "#chaos", "#balls"]),
-    "race": dict(
-        titles=["{title} — who reaches the bottom first? 🤔", "Math experiment: {title}. Guess the winner!",
-                "{title}… the ending surprised me", "Exponential growth explained with balls: {title}"],
-        cover=["{title}\nWHO WINS?", "GUESS\nTHE WINNER", "{title}"],
-        desc="{question} Comment your guess BEFORE the end! 👇\n"
-             "Expérience mathématique : qui atteint le bas en premier ? Donne ton pronostic en commentaire !",
-        tags=["#math", "#maths", "#experiment", "#satisfying", "#exponential", "#simulation", "#marblerace", "#physics", "#didyouknow"]),
-}
 COMMON_TAGS = ["#fyp", "#viral", "#shorts", "#pourtoi"]
 
 
@@ -76,30 +43,18 @@ def main():
     ap.add_argument("--date", default=dtm.date.today().isoformat())
     ap.add_argument("--scale", type=float, default=1.0)
     ap.add_argument("--duration", type=float, default=70)
+    ap.add_argument("--concept", default=None, help="forcer un concept (test)")
     a = ap.parse_args()
     day = dtm.date.fromisoformat(a.date)
     seed = day.toordinal()
-    kind, opts = ROTATION[seed % len(ROTATION)]
+    cid = a.concept or concept_for_day(seed)
+    c = CONCEPTS[cid]
     rnd = random.Random(seed)
     od = os.path.join(HERE, "out", a.date)
     os.makedirs(od, exist_ok=True)
     video = os.path.join(od, "video.mp4")
-    py = [sys.executable, "-W", "ignore"]
-    common = ["--seed", str(seed), "--duration", str(a.duration), "--scale", str(a.scale), "--out", video]
-    fmtvars = {}
-    if kind == "wheel":
-        pal = rnd.choice(["neon", "sunset", "toxic"])
-        cmd = py + [os.path.join(HERE, "wheel_blackhole.py"), "--palette", pal] + common
-    elif kind == "walls":
-        cmd = py + [os.path.join(HERE, "crusher_walls.py")] + common
-    else:
-        sys.path.insert(0, HERE)
-        from race_towers import EXPERIMENTS
-        e = EXPERIMENTS[opts["exp"]]
-        fmtvars = dict(title=e["title"], question=e["question"].capitalize())
-        cmd = py + [os.path.join(HERE, "race_towers.py"), "--exp", opts["exp"]] + common
-    print("Template du jour:", kind, opts, "seed", seed, flush=True)
-    subprocess.run(cmd, check=True, cwd=HERE)
+    print("Concept du jour:", cid, "seed", seed, flush=True)
+    render(cid, seed, a.duration, a.scale, video)
 
     # Telegram limite les bots à 50 Mo : on recompresse si besoin
     if os.path.getsize(video) > 45e6:
@@ -108,14 +63,13 @@ def main():
                         "-c:a", "copy", tmp], check=True)
         os.replace(tmp, video)
 
-    m = META[kind]
-    title = rnd.choice(m["titles"]).format(**fmtvars)
-    cover_text = rnd.choice(m["cover"]).format(**fmtvars)
-    tags = rnd.sample(m["tags"], 6) + COMMON_TAGS
-    desc = m["desc"].format(**fmtvars)
+    title = rnd.choice(c["titles"])
+    cover_text = rnd.choice(c["cover"])
+    tags = rnd.sample(c["tags"], min(6, len(c["tags"]))) + COMMON_TAGS
+    desc = c["desc"]
     caption = f"{title}\n\n{desc}\n\n{' '.join(tags)}"
-    make_cover(video, os.path.join(od, "cover.jpg"), cover_text, t=20 if kind == "race" else 55)  # course : pas de spoiler
-    meta = dict(date=a.date, template=kind, options=opts, seed=seed, title=title, description=desc, hashtags=tags,
+    make_cover(video, os.path.join(od, "cover.jpg"), cover_text, t=min(20 if c["engine"] == "race" else 55, a.duration - 2))  # course : pas de spoiler
+    meta = dict(date=a.date, template=cid, options=c["params"], seed=seed, title=title, description=desc, hashtags=tags,
                 youtube_title=(title[:90] + " #shorts"), caption=caption)
     with open(os.path.join(od, "meta.json"), "w") as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)

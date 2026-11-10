@@ -61,8 +61,25 @@ class Ring:
                 u = np.array([math.cos(phi), math.sin(phi)]); tv = np.array([-u[1], u[0]])
                 pu = rel @ u; pt = rel @ tv
                 normals.append((np.broadcast_to(u, rel.shape), apo - rad, pu, np.abs(pt) < half + rad))
+        if self.gap_w <= 0:
+            # filet de sécurité : une bille projetée derrière un coin est ramenée à l'intérieur
+            inner = self.R * (math.cos(math.pi / self.shape) if self.shape != "circle" else 1.0)
+            if self.shape == "circle":
+                far = d > self.R + rad
+            else:
+                k_ = self.shape; apo_ = self.R * math.cos(math.pi / k_)
+                far = np.zeros(len(pos), bool)
+                for i_ in range(k_):
+                    ph_ = self.theta + (i_ + 0.5) * 2 * math.pi / k_
+                    far |= rel @ np.array([math.cos(ph_), math.sin(ph_)]) > apo_ + 0.5 * rad
+            if far.any():
+                pos[far] = np.array([cx, cy]) + rel[far] / d[far, None] * (inner - rad[far, None] if np.ndim(rad) else inner - rad) * 0.95
+                vel[far] *= -1
+                rel = pos - (cx, cy)
+                d = np.hypot(rel[:, 0], rel[:, 1]) + 1e-9
         for u, lim, proj, along in normals:
-            m = (proj > lim) & (proj < lim + 2 * rad + margin) & along & ~gap
+            upper = np.inf if self.gap_w <= 0 else lim + 2 * rad + margin + 6 * rad
+            m = (proj > lim) & (proj < upper) & along & ~gap
             if not m.any():
                 continue
             pos[m] -= u[m] * (proj[m] - lim[m] if np.ndim(lim) else proj[m] - lim)[:, None]
@@ -77,6 +94,8 @@ class Ring:
         return hit
 
     def outside(self, pos, rad, cx, cy):
+        if self.gap_w <= 0:
+            return np.zeros(len(pos), bool)   # forme fermée : rien ne sort
         rel = pos - (cx, cy)
         if self.shape == "circle":
             return np.hypot(rel[:, 0], rel[:, 1]) > self.R + rad
@@ -118,8 +137,9 @@ def run(c, seed, duration, scale, out):
         rings.append(Ring(c.get("shape", "circle"), c.get("size", 450) * S, spin_dir * c.get("spin", 0.35),
                           gap_w=c.get("gap", 0.0), gap_at=rng.uniform(0, 2 * math.pi)))
     holes = [dict(h) for h in c.get("holes", [])]
-    for h in holes:
-        h["phase"] = rng.uniform(0, 2 * math.pi); h["w"] = h.get("w", 0.5) * rng.choice([-1, 1])
+    base_ph, hdir = rng.uniform(0, 2 * math.pi), rng.choice([-1, 1])
+    for i, h in enumerate(holes):   # trous répartis régulièrement, même sens de rotation
+        h["phase"] = base_ph + i * 2 * math.pi / len(holes); h["w"] = h.get("w", 0.5) * hdir
 
     # ---- billes
     teams = c.get("teams")
@@ -160,7 +180,7 @@ def run(c, seed, duration, scale, out):
             mx.add(t, mx.note(mx.scale_freq(note_i if c.get("melody", "up") == "up" else int(rng.integers(0, 10)), octaves=2)), vol)
             last_note = t
 
-    def spawn(p, n, speed=None):
+    def spawn(p, n, speed=None, team=None):
         nonlocal pos, vel, rad, col, cd
         if n <= 0:
             return
@@ -169,7 +189,11 @@ def run(c, seed, duration, scale, out):
         pos = np.vstack([pos, np.array(p, float) + np.column_stack([np.cos(a), np.sin(a)]) * 4 * S])
         vel = np.vstack([vel, np.column_stack([np.cos(a), np.sin(a)]) * np.reshape(sp, (-1, 1))])
         rad = np.concatenate([rad, np.full(n, r0)])
-        col = np.concatenate([col, (col.max() + 1 if len(col) else 0) * np.ones(n, int) % 5 if not teams else np.zeros(n, int)])
+        if teams:
+            newc = np.full(n, int(team) if team is not None else int(rng.integers(0, 2)))
+        else:
+            newc = rng.integers(0, len(pal["hues"]), n)
+        col = np.concatenate([col, newc])
         cd = np.concatenate([cd, np.full(n, 0.5)])
 
     def keep(mask):
@@ -177,11 +201,14 @@ def run(c, seed, duration, scale, out):
         pos, vel, rad, col, cd = pos[mask], vel[mask], rad[mask], col[mask], cd[mask]
 
     wall_fx = c.get("wall")
+    attract = 1.0
     for fi in range(n_frames):
         t = fi / FPS
         frac = min(t / (0.85 * duration), 1.0)
         target = n0 * (cap / max(n0, 1)) ** frac
         allow = len(pos) < target * 1.15
+        ratio = target / max(len(pos), 1)
+        attract = float(np.clip(attract * (1.04 if ratio > 1.3 else 0.97 if ratio < 0.9 else 1.0), 0.5, 25))
         events_mult = 0
         events_hit = 0
         for k in range(sub):
@@ -192,14 +219,15 @@ def run(c, seed, duration, scale, out):
                 vel[:, 1] += g * dt
             sp = np.hypot(vel[:, 0], vel[:, 1])[:, None]
             vel *= np.clip(vmin / np.maximum(sp, 1e-6), 1.0, 1.02)
-            vel *= np.where(sp > vmax, 0.99, 1.0)
+            vel *= np.where(sp > vmax * 1.05, 0.99, 1.0)
             # léger attracteur vers les trous noirs
             for h in holes:
                 hx = cx + h["orbit"] * S * math.cos(h["w"] * tt + h["phase"]); hy = cy + h["orbit"] * S * math.sin(h["w"] * tt + h["phase"])
                 h["x"], h["y"] = hx, hy
                 dvec = np.array([hx, hy]) - pos
                 dist = np.hypot(dvec[:, 0], dvec[:, 1]) + 1
-                vel += dvec / dist[:, None] * (h.get("pull", 1.0) * 2500 * S * S / (dist[:, None] + 60 * S)) * dt
+                boost = attract if h["effect"] != "kill" else 1.0
+                vel += dvec / dist[:, None] * (h.get("pull", 1.0) * boost * 2500 * S * S / (dist[:, None] + 60 * S)) * dt
             pos += vel * dt
             cd -= dt
             # collisions bille-bille
@@ -220,11 +248,20 @@ def run(c, seed, duration, scale, out):
                     np.add.at(vel[:, 0], ju, -imp * nx); np.add.at(vel[:, 1], ju, -imp * ny)
                     if teams:
                         diff = (col[iu] != col[ju]) & (cd[iu] <= 0) & (cd[ju] <= 0)
+                        n_tot = max(len(col), 1)
                         for a_, b_ in zip(iu[diff], ju[diff]):
                             # la bille la plus lente adopte la couleur de l'autre
                             sa, sb = np.hypot(*vel[a_]), np.hypot(*vel[b_])
                             loser, winner = (a_, b_) if sa < sb else (b_, a_)
-                            col[loser] = col[winner]; cd[loser] = 0.3
+                            share = float((col == col[winner]).sum()) / n_tot
+                            p_conv = c.get("convert_p", 0.12)
+                            if t < 0.8 * duration:   # équilibrage : le camp en tête convertit moins (suspense jusqu'au bout)
+                                p_conv *= float(np.clip(2.2 * (1 - share), 0.05, 1.6))
+                            else:
+                                p_conv *= 1.5
+                            if rng.random() >= p_conv:
+                                continue
+                            col[loser] = col[winner]; cd[loser] = 1.0
                             events_mult += 1
             # paroi : anneau actif le plus intérieur
             active = [r_ for r_ in rings if r_.alive]
@@ -238,20 +275,30 @@ def run(c, seed, duration, scale, out):
                     events_hit += nh
                     idx = np.nonzero(hit & (cd <= 0))[0]
                     if wall_fx == "grow" and len(idx):
-                        tgt = r0 + (c.get("grow_max", 0.9) * ring.R * math.cos(math.pi / ring.shape if ring.shape != "circle" else 0) - r0) * frac ** 1.2
-                        rad[idx] = np.maximum(rad[idx] + c.get("grow_min", 1.0) * S, rad[idx] + (tgt - rad[idx]) * 0.35)
+                        inner_r = ring.R * (math.cos(math.pi / ring.shape) if ring.shape != "circle" else 1.0)
+                        rmax = c.get("grow_max", 0.9) * inner_r
+                        if c.get("split_at"):
+                            filled = float((rad ** 2).sum()) / inner_r ** 2
+                            if filled < 0.5:
+                                rad[idx] += c.get("grow_step", 2.0) * S
+                        else:
+                            tgt = r0 + (rmax - r0) * frac ** 1.2
+                            rad[idx] = np.minimum(rmax, np.maximum(rad[idx] + c.get("grow_min", 1.0) * S, rad[idx] + (tgt - rad[idx]) * 0.35))
                         cd[idx] = 0.05
                         if c.get("split_at"):
                             big = idx[rad[idx] > c["split_at"] * S]
                             for b in big:
                                 if len(pos) < cap and allow:
                                     rad[b] = r0
-                                    spawn(pos[b], 1)
+                                    spawn(pos[b], 1, team=col[b])
                                     events_mult += 1
                                 else:
                                     rad[b] = c["split_at"] * S
                     elif wall_fx == "speed" and len(idx):
-                        vel[idx] *= c.get("speed_mul", 1.035)
+                        v_tgt = vmin * (vmax / vmin) ** min(t / (0.95 * duration), 1.0)
+                        spd = np.hypot(vel[idx, 0], vel[idx, 1])
+                        new = np.minimum(spd * c.get("speed_mul", 1.035), np.maximum(v_tgt, spd))
+                        vel[idx] *= (new / np.maximum(spd, 1e-6))[:, None]
                         cd[idx] = 0.05
                     elif wall_fx == "trail" and len(idx):
                         for i in idx:
@@ -261,7 +308,7 @@ def run(c, seed, duration, scale, out):
                         idx = idx[: max(0, cap - len(pos))]
                         cd[idx] = 0.6
                         for i in idx:
-                            spawn(pos[i], 1)
+                            spawn(pos[i], 1, team=col[i])
                         events_mult += len(idx)
                 # sortie par l'ouverture
                 outm = ring.outside(pos, rad, cx, cy)
@@ -295,12 +342,16 @@ def run(c, seed, duration, scale, out):
                 if not len(pos):
                     break
                 dh = np.hypot(pos[:, 0] - h["x"], pos[:, 1] - h["y"])
-                inn = np.nonzero((dh < h["r"] * S * 0.8) & (cd <= 0))[0]
+                grow_h = 1.0 if h["effect"] == "kill" else min(1.7, 1 + 0.06 * (attract - 1))
+                h["grow"] = grow_h
+                inn = np.nonzero((dh < h["r"] * S * 0.8 * grow_h) & (cd <= 0))[0]
                 if not len(inn):
                     continue
                 eff = h["effect"]
                 if eff == "kill":
-                    inn = inn[: max(0, len(pos) - 1)]   # on garde toujours au moins une bille
+                    # le trou mortel épargne les billes quand elles sont trop peu nombreuses (suspense sans extinction)
+                    floor_n = max(2, int(target * 0.35))
+                    inn = inn[: max(0, len(pos) - floor_n)]
                     if not len(inn):
                         continue
                     m = np.ones(len(pos), bool); m[inn] = False; keep(m)
@@ -316,7 +367,7 @@ def run(c, seed, duration, scale, out):
                         vel[i] = (math.cos(a) * vmin, math.sin(a) * vmin); cd[i] = 0.7
                         continue
                     m[i] = False
-                    spawn((h["x"], h["y"]), mult, speed=None)
+                    spawn((h["x"], h["y"]), mult, team=col[i])
                     events_mult += 1
                 m = np.concatenate([m, np.ones(len(pos) - len(m), bool)])
                 keep(m)
@@ -325,10 +376,10 @@ def run(c, seed, duration, scale, out):
             # pilotage de l'ouverture des anneaux : rythme cible (dernier anneau vers 90 % de la durée)
             if c.get("rings"):
                 done = stats["broken"] / len(rings)
-                aim = min(t / (0.9 * duration), 1.0)
+                aim = min(t / (0.85 * duration), 1.0)
                 for r_ in rings:
                     base = c.get("ring_gap", 0.55)
-                    r_.gap_w = float(np.clip(base * (1 + 3 * (aim - done)), base * 0.4, base * 2.5))
+                    r_.gap_w = float(np.clip(base * (1 + 15 * (aim - done)), base * 0.4, min(base * 6.0, 4.5)))
         if events_mult:
             play_note(t, 0.42)
         if events_hit:
@@ -375,7 +426,7 @@ def run(c, seed, duration, scale, out):
             if "x" not in h:
                 continue
             hp = h.get("pulse", 0.0); h["pulse"] = max(0, hp - 0.08)
-            rr_ = h["r"] * S * (1 + 0.15 * hp)
+            rr_ = h["r"] * S * h.get("grow", 1.0) * (1 + 0.15 * hp)
             hc = (255, 60, 60) if h["effect"] == "kill" else hsv(pal["ring"] + 0.1, 0.7, 1)
             for kk in range(5, 0, -1):
                 dr.ellipse([h["x"] - rr_ - kk * 7 * S, h["y"] - rr_ - kk * 7 * S, h["x"] + rr_ + kk * 7 * S, h["y"] + rr_ + kk * 7 * S], fill=(*hc, 16))
@@ -430,7 +481,8 @@ def run(c, seed, duration, scale, out):
         elif hud == "bounces":
             big = fmt(stats["bounces"])
         elif hud == "size":
-            big = f"{int(100 * float(rad.max()) / (rings[0].R)) if len(rad) else 0}%"
+            inner_r = rings[0].R * (math.cos(math.pi / rings[0].shape) if rings[0].shape != "circle" else 1.0)
+            big = f"{min(100, round(100 * float(rad.max()) / (c.get('grow_max', 0.9) * inner_r))) if len(rad) else 0}%"
         elif hud == "speed":
             big = f"{int(float(np.hypot(*vel[0])) / S / 10) if len(vel) else 0} km/h"
         elif hud == "teams":
@@ -439,10 +491,23 @@ def run(c, seed, duration, scale, out):
             tot = max(a_ + b_, 1)
             dr.rounded_rectangle([W * .1, 330 * S, W * .9, 352 * S], 8 * S, fill=(80, 140, 255, 255))
             dr.rounded_rectangle([W * .1, 330 * S, W * .1 + W * .8 * a_ / tot, 352 * S], 8 * S, fill=(255, 80, 80, 255))
+            if t > duration - 4 and a_ != b_:
+                msg = "RED WINS!" if a_ > b_ else "BLUE WINS!"
+                fw = ImageFont.truetype(FONT, int(80 * S))
+                tw2 = dr.textlength(msg, font=fw)
+                colw = (255, 80, 80, 245) if a_ > b_ else (80, 140, 255, 245)
+                dr.rounded_rectangle([(W - tw2) / 2 - 30 * S, cy - 70 * S, (W + tw2) / 2 + 30 * S, cy + 60 * S], 24 * S, fill=colw)
+                dr.text(((W - tw2) / 2, cy - 55 * S), msg, font=fw, fill=(255, 255, 255, 255))
         else:
             big = ""
         tw = dr.textlength(big, font=f_big)
         dr.text(((W - tw) / 2, 150 * S), big, font=f_big, fill=(255, 255, 255, 255))
+        if c.get("rings") and stats["broken"] == len(rings):
+            fw = ImageFont.truetype(FONT, int(80 * S))
+            msg = "ESCAPED!"
+            tw = dr.textlength(msg, font=fw)
+            dr.rounded_rectangle([(W - tw) / 2 - 30 * S, cy - 70 * S, (W + tw) / 2 + 30 * S, cy + 60 * S], 24 * S, fill=(255, 210, 60, 240))
+            dr.text(((W - tw) / 2, cy - 55 * S), msg, font=fw, fill=(30, 10, 40, 255))
         subl = c.get("subtitle", "")
         if subl:
             tw = dr.textlength(subl, font=f_mid)
