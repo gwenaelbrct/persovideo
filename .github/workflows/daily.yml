@@ -79,6 +79,24 @@ jobs:
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
         run: python publish.py out/${{ steps.gate.outputs.today }}
 
+      - name: Release du jour (e-mail automatique avec vidéo + texte à copier)
+        if: steps.gate.outputs.go == 'true' && (github.event_name == 'schedule' || inputs.publish)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          D=out/${{ steps.gate.outputs.today }}
+          python - "$D" <<'PY'
+          import json, sys
+          d = sys.argv[1]; m = json.load(open(f"{d}/meta.json"))
+          open(f"{d}/notes.md", "w").write(
+              "### 📱 Texte à copier pour TikTok / Instagram\n\n```\n" + m["caption"] + "\n```\n\n"
+              "### ▶️ Titre YouTube Shorts\n\n```\n" + m["youtube_title"] + "\n```\n\n"
+              "Vidéo et couverture : fichiers `video.mp4` et `cover.jpg` ci-dessous.\n")
+          PY
+          gh release create "${{ steps.gate.outputs.today }}" "$D/video.mp4" "$D/cover.jpg" \
+            --title "🎬 ${{ steps.gate.outputs.today }} — $(python -c "import json;print(json.load(open('$D/meta.json'))['title'])")" \
+            --notes-file "$D/notes.md"
+
       - name: Journal (garde aussi le dépôt actif)
         if: steps.gate.outputs.go == 'true' && github.event_name == 'schedule'
         run: |
