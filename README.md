@@ -1,7 +1,7 @@
 # Vidéos satisfaisantes automatiques
 
-Chaque jour à 17h30 (heure de Paris), GitHub Actions génère une vidéo de 1 min 10 (1080×1920, avec son),
-puis la publie à 18h00 : Telegram (pour publier toi-même sur TikTok/YouTube en attendant), Instagram Reels, YouTube Shorts.
+Chaque jour à 10h30 (heure de Paris), GitHub Actions génère une vidéo de 1 min 10 (1080×1920, avec son),
+puis la publie à 11h00 : Telegram (pour publier toi-même sur TikTok/YouTube en attendant), Instagram Reels, YouTube Shorts.
 
 ## Templates (rotation sur 7 jours)
 | Fichier | Contenu |
