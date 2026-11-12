@@ -1,7 +1,7 @@
 # Vidéos satisfaisantes automatiques
 
-Chaque jour à 10h30 (heure de Paris), GitHub Actions génère une vidéo de 1 min 10 (1080×1920, avec son),
-puis la publie à 11h00 : un e-mail GitHub (Release) avec la vidéo, la couverture et le texte à copier ;
+Chaque matin (heure de Paris), GitHub Actions génère une vidéo de 1 min 10 (1080×1920, avec son),
+puis la publie à 10h00 : un e-mail GitHub (Release) avec la vidéo, la couverture et le texte à copier ;
 Instagram Reels et YouTube Shorts en automatique une fois leurs accès configurés.
 
 ## 30 concepts, un par jour

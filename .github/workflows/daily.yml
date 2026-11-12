@@ -2,21 +2,25 @@ name: Vidéo du jour
 
 on:
   schedule:
-    # 10h30 heure de Paris : 08:30 UTC en été, 09:30 UTC en hiver (le script ignore le mauvais créneau).
-    # GitHub peut retarder ou sauter un déclenchement planifié : plusieurs créneaux de rattrapage,
-    # le premier qui passe publie, les suivants voient que c'est déjà fait et s'arrêtent.
-    - cron: "30 8 * * *"
-    - cron: "30 9 * * *"
-    - cron: "47 8 * * *"
-    - cron: "47 9 * * *"
-    - cron: "13 10 * * *"
-    - cron: "13 11 * * *"
+    # E-mail à 10h00 (heure de Paris). GitHub retarde souvent (parfois de plusieurs heures) ou saute les
+    # déclenchements planifiés : on démarre tôt, sur plusieurs créneaux (heures UTC, été comme hiver).
+    # Le premier qui passe génère la vidéo puis attend 10h00 ; les suivants voient que c'est fait et s'arrêtent.
+    - cron: "5 6 * * *"
+    - cron: "35 6 * * *"
+    - cron: "5 7 * * *"
+    - cron: "35 7 * * *"
+    - cron: "5 8 * * *"
+    - cron: "35 8 * * *"
   workflow_dispatch:
     inputs:
       publish:
         description: "Publier sur les réseaux (sinon : génération seule)"
         type: boolean
         default: true
+      now:
+        description: "Publier tout de suite (sinon : attendre 10h00 heure de Paris)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -27,7 +31,7 @@ concurrency:
 jobs:
   video:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
 
@@ -42,7 +46,7 @@ jobs:
           if grep -q "^$TODAY" published.log 2>/dev/null || gh release view "$TODAY" --repo "${{ github.repository }}" >/dev/null 2>&1; then
             echo "Déjà publié aujourd'hui"; echo "go=false" >> "$GITHUB_OUTPUT"; exit 0
           fi
-          if [ "${{ github.event_name }}" = "schedule" ] && { [ "$HOUR" -lt 10 ] || [ "$HOUR" -ge 15 ]; }; then
+          if [ "${{ github.event_name }}" = "schedule" ] && { [ "$HOUR" -lt 7 ] || [ "$HOUR" -ge 15 ]; }; then
             echo "Mauvais créneau horaire ($HOUR h à Paris)"; echo "go=false" >> "$GITHUB_OUTPUT"; exit 0
           fi
           echo "go=true" >> "$GITHUB_OUTPUT"
@@ -69,10 +73,10 @@ jobs:
           path: out/${{ steps.gate.outputs.today }}
           retention-days: 14
 
-      - name: Attendre 11h00 (heure de Paris)
-        if: steps.gate.outputs.go == 'true' && github.event_name == 'schedule'
+      - name: Attendre 10h00 (heure de Paris)
+        if: steps.gate.outputs.go == 'true' && !inputs.now
         run: |
-          NOW=$(date +%s); TARGET=$(TZ=Europe/Paris date -d "today 11:00" +%s)
+          NOW=$(date +%s); TARGET=$(TZ=Europe/Paris date -d "today 10:00" +%s)
           if [ "$TARGET" -gt "$NOW" ]; then echo "Attente $((TARGET-NOW)) s"; sleep $((TARGET-NOW)); fi
 
       - name: Publier
