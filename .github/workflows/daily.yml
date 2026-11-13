@@ -80,6 +80,7 @@ jobs:
           if [ "$TARGET" -gt "$NOW" ]; then echo "Attente $((TARGET-NOW)) s"; sleep $((TARGET-NOW)); fi
 
       - name: Publier
+        continue-on-error: true   # une plateforme en échec ne doit pas bloquer l'e-mail
         if: steps.gate.outputs.go == 'true' && (github.event_name == 'schedule' || inputs.publish)
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
@@ -89,6 +90,7 @@ jobs:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          YT_PRIVACY: private       # tu passes le Short en public toi-même chaque matin
         run: python publish.py out/${{ steps.gate.outputs.today }}
 
       - name: Release du jour (e-mail automatique avec vidéo + texte à copier)
@@ -109,11 +111,20 @@ jobs:
             --title "🎬 ${{ steps.gate.outputs.today }} — $(python -c "import json;print(json.load(open('$D/meta.json'))['title'])")" \
             --notes-file "$D/notes.md"
 
-      - name: Journal (garde aussi le dépôt actif)
+      - name: Journal (garde aussi le dépôt actif) + nettoyage des vieilles Releases
         if: steps.gate.outputs.go == 'true' && (github.event_name == 'schedule' || inputs.publish)
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           python -c "import json;m=json.load(open('out/${{ steps.gate.outputs.today }}/meta.json'));print(m['date'],m['template'],m['options'],m['title'],sep=' | ')" >> published.log
           git config user.name "daily-video-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # nettoyage : on ne garde que les Releases des 60 derniers jours (les vidéos restent sur YouTube)
+          LIMIT=$(date -u -d "60 days ago" +%F)
+          gh release list --repo "${{ github.repository }}" --limit 400 --json tagName --jq '.[].tagName' | while read -r TAG; do
+            if [[ "$TAG" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] && [[ "$TAG" < "$LIMIT" ]]; then
+              gh release delete "$TAG" --repo "${{ github.repository }}" --yes --cleanup-tag || true
+            fi
+          done
           git add published.log && git commit -m "Vidéo du ${{ steps.gate.outputs.today }}"
           git pull --rebase -q origin main && git push

@@ -108,6 +108,17 @@ def youtube(d, meta):
     with open(path, "rb") as f:
         s, _, r = http("PUT", loc, f.read(), {"Content-Type": "video/mp4"}, timeout=900)
     print("YouTube :", s, r[:300])
+    if s not in (200, 201):
+        raise SystemExit(f"YouTube upload : {s}")
+    vid = json.loads(r)["id"]
+    print(f"YouTube : https://youtube.com/shorts/{vid} ({body['status']['privacyStatus']})")
+    # couverture comme miniature (facultatif : YouTube peut la refuser, ça ne bloque rien)
+    cover = os.path.join(d, "cover.jpg")
+    if os.path.exists(cover) and os.path.getsize(cover) < 2_000_000:
+        with open(cover, "rb") as f:
+            s2, _, r2 = http("POST", f"https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId={vid}", f.read(),
+                             {"Authorization": f"Bearer {at}", "Content-Type": "image/jpeg"})
+        print("YouTube miniature :", s2, "ok" if s2 == 200 else r2[:200])
 
 
 if __name__ == "__main__":
