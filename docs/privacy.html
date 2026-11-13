@@ -1,25 +1,51 @@
 <!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>persovideo — Confidentialité</title>
-<style>body{font-family:system-ui,sans-serif;max-width:720px;margin:40px auto;padding:0 16px;line-height:1.6;color:#1a1a1a;background:#fff}a{color:#3355cc}</style>
-</head><body>
-<h1>Règles de confidentialité — persovideo</h1>
-<p><em>Dernière mise à jour : 13 novembre 2026</em></p>
-<h2>Français</h2>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>persovideo — Privacy Policy</title><link rel="stylesheet" href="style.css"></head><body>
+<h1>Privacy Policy — persovideo</h1>
+<p class="muted">Last updated: November 13, 2026 · <a href="#fr">Version française plus bas</a></p>
+
+<h2>1. YouTube API Services</h2>
+<p>persovideo uses <b>YouTube API Services</b> (YouTube Data API v3) to upload videos to its owner's own YouTube channel.
+By using persovideo, you agree to be bound by the <a href="https://www.youtube.com/t/terms">YouTube Terms of Service</a>.
+YouTube and Google's handling of data is governed by the <a href="https://policies.google.com/privacy">Google Privacy Policy</a>
+(<a href="http://www.google.com/policies/privacy">http://www.google.com/policies/privacy</a>).</p>
+
+<h2>2. Information accessed, collected and used</h2>
 <ul>
-<li><strong>Usage</strong> : persovideo est un outil personnel qui publie des vidéos générées automatiquement sur les comptes (YouTube, TikTok, Instagram) de son seul propriétaire.</li>
-<li><strong>Données utilisées</strong> : uniquement les jetons d'autorisation fournis par le propriétaire, nécessaires à la mise en ligne des vidéos. Ils sont stockés de façon chiffrée (secrets GitHub Actions) et ne sont jamais partagés.</li>
-<li><strong>Données de tiers</strong> : aucune. L'outil ne lit, ne collecte, ne vend ni ne partage aucune donnée d'autres utilisateurs.</li>
-<li><strong>Services Google</strong> : l'utilisation des données reçues des API Google respecte les <a href="https://developers.google.com/terms/api-services-user-data-policy">règles relatives aux données utilisateur des services d'API Google</a>, y compris les exigences d'utilisation limitée. L'accès peut être révoqué à tout moment sur <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</li>
-<li><strong>Contact</strong> : via <a href="https://github.com/gwenaelbrct/persovideo/issues">la page GitHub du projet</a>.</li>
+<li>persovideo only uses the OAuth authorization granted by its owner with the <code>youtube.upload</code> scope, to upload videos it generated itself.</li>
+<li>It does not read, collect or use any other YouTube data (no comments, analytics, subscribers, viewing history or personal information).</li>
+<li>It has no other users and collects no data from third parties.</li>
 </ul>
-<h2>English</h2>
+
+<h2>3. Storage and sharing</h2>
 <ul>
-<li><strong>Purpose</strong>: persovideo is a personal tool that uploads automatically generated videos to its owner's own accounts (YouTube, TikTok, Instagram).</li>
-<li><strong>Data used</strong>: only the authorization tokens provided by the owner, required to upload the videos. They are stored encrypted (GitHub Actions secrets) and never shared.</li>
-<li><strong>Third-party data</strong>: none. The tool does not read, collect, sell or share any other user's data.</li>
-<li><strong>Google services</strong>: use of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements. Access can be revoked at any time at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</li>
-<li><strong>Contact</strong>: via <a href="https://github.com/gwenaelbrct/persovideo/issues">the project's GitHub page</a>.</li>
+<li>The only stored information is the owner's OAuth credentials (client ID, client secret, refresh token), stored encrypted as GitHub Actions secrets.</li>
+<li>No YouTube API data is stored. No information is sold, shared with or disclosed to third parties.</li>
+<li>persovideo uses no cookies and no analytics or advertising trackers.</li>
 </ul>
-<p><a href="index.html">← Accueil / Home</a></p>
+
+<h2>4. Revocation and deletion</h2>
+<ul>
+<li>Access can be revoked at any time from the Google security settings page:
+<a href="https://security.google.com/settings/security/permissions">https://security.google.com/settings/security/permissions</a>.</li>
+<li>When access is revoked, or upon request, the stored OAuth credentials are deleted (removed from GitHub secrets) within 7 days.
+Since no YouTube API data is stored, there is no other data to delete.</li>
+</ul>
+
+<h2>5. Contact</h2>
+<p>Questions or deletion requests: <a href="https://github.com/gwenaelbrct/persovideo/issues">github.com/gwenaelbrct/persovideo/issues</a>.</p>
+
+<h2 id="fr">Version française</h2>
+<ul>
+<li><b>Services d'API YouTube</b> : persovideo utilise les services d'API YouTube (YouTube Data API v3) pour publier des vidéos sur la chaîne YouTube de son propriétaire.
+En utilisant persovideo, vous acceptez les <a href="https://www.youtube.com/t/terms">conditions d'utilisation de YouTube</a>.
+Voir aussi les <a href="https://policies.google.com/privacy">règles de confidentialité de Google</a>.</li>
+<li><b>Données utilisées</b> : uniquement l'autorisation OAuth (portée <code>youtube.upload</code>) accordée par le propriétaire. Aucune autre donnée YouTube n'est lue ni collectée.</li>
+<li><b>Stockage et partage</b> : seuls les identifiants OAuth du propriétaire sont stockés, chiffrés (secrets GitHub Actions). Aucune donnée n'est vendue ni partagée. Pas de cookies ni de traceurs.</li>
+<li><b>Révocation et suppression</b> : l'accès peut être révoqué à tout moment sur
+<a href="https://security.google.com/settings/security/permissions">security.google.com/settings/security/permissions</a>.
+Les identifiants stockés sont supprimés sous 7 jours après révocation ou sur demande.</li>
+<li><b>Contact</b> : <a href="https://github.com/gwenaelbrct/persovideo/issues">page GitHub du projet</a>.</li>
+</ul>
+<p><a href="index.html">← Home / Accueil</a></p>
 </body></html>

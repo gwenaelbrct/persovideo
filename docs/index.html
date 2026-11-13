@@ -1,13 +1,18 @@
 <!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>persovideo</title>
-<style>body{font-family:system-ui,sans-serif;max-width:720px;margin:40px auto;padding:0 16px;line-height:1.6;color:#1a1a1a;background:#fff}a{color:#3355cc}</style>
-</head><body>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>persovideo</title><link rel="stylesheet" href="style.css"></head><body>
 <h1>persovideo</h1>
-<p><strong>FR</strong> — persovideo est un outil personnel qui génère chaque jour une courte vidéo d'animation (simulation physique de billes)
-et la publie sur la chaîne de son propriétaire. Il n'est utilisé que par son propriétaire et ne collecte aucune donnée de tiers.</p>
-<p><strong>EN</strong> — persovideo is a personal tool that generates a short animated video (a physics simulation of bouncing balls) every day
-and uploads it to its owner's own channel. It is used only by its owner and does not collect any third-party data.</p>
-<p><a href="privacy.html">Règles de confidentialité / Privacy policy</a> · <a href="terms.html">Conditions d'utilisation / Terms of service</a></p>
-<p>Code source / Source code : <a href="https://github.com/gwenaelbrct/persovideo">github.com/gwenaelbrct/persovideo</a></p>
+<p class="muted">Personal daily video generator and uploader · Générateur et publicateur de vidéos personnel</p>
+<div class="yt">▶ <span>This tool uses <b>YouTube</b> API Services to upload videos to its owner's own YouTube channel.</span></div>
+<p class="links"><a href="privacy.html"><strong>Privacy Policy / Règles de confidentialité</strong></a>
+<a href="terms.html"><strong>Terms of Service / Conditions d'utilisation</strong></a></p>
+<h2>What it does</h2>
+<p>persovideo is a personal, non-commercial tool. Every day it generates an original short animation (a physics simulation of bouncing balls,
+rendered with Python) and uploads it as a YouTube Short to its owner's own channel, using the YouTube Data API v3
+(<code>videos.insert</code>, scope <code>youtube.upload</code>). It is used only by its owner and does not access any other user's data.</p>
+<h2>Ce que fait l'outil</h2>
+<p>persovideo est un outil personnel et non commercial. Chaque jour, il génère une courte animation originale (simulation physique de billes)
+et la publie en YouTube Short sur la chaîne de son propriétaire, via l'API YouTube Data v3. Il n'est utilisé que par son propriétaire
+et n'accède aux données d'aucun autre utilisateur.</p>
+<p>Source code: <a href="https://github.com/gwenaelbrct/persovideo">github.com/gwenaelbrct/persovideo</a></p>
 </body></html>
