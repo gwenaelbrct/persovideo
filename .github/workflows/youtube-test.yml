@@ -1,0 +1,31 @@
+name: Test YouTube
+
+# Envoie la dernière vidéo publiée sur YouTube, en PRIVÉ, pour vérifier les accès. Aucun e-mail, aucune Release.
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Récupérer la dernière vidéo publiée
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p out/test
+          gh release download --repo "${{ github.repository }}" --pattern video.mp4 --dir out/test
+          python3 - <<'PY'
+          import json
+          json.dump(dict(title="Test persovideo", youtube_title="Test persovideo #shorts",
+                         caption="Test d'envoi automatique (vidéo privée).", hashtags=["#shorts"]),
+                    open("out/test/meta.json", "w"))
+          PY
+      - name: Envoyer sur YouTube (privé)
+        env:
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          YT_PRIVACY: private
+        run: python3 publish.py out/test youtube
