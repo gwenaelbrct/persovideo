@@ -15,7 +15,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p out/test
-          gh release download --repo "${{ github.repository }}" --pattern video.mp4 --dir out/test
+          gh release download --repo "${{ github.repository }}" --pattern video.mp4 --pattern cover.jpg --dir out/test
           python3 - <<'PY'
           import json
           json.dump(dict(title="Test persovideo", youtube_title="Test persovideo #shorts",
