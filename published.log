@@ -1,3 +1,4 @@
 2026-11-11 | 01_wheel_blackhole | {} | Can 1 ball fill the entire wheel? 🤯
 2026-11-12 | 21_x2_vs_half | {'exp': 'x2_vs_half'} | 1 ball ×2 vs 10 million ÷2
 2026-11-13 | 09_escape_circle | {'shape': 'circle', 'size': 380, 'spin': 0.6, 'gap': 0.5, 'gravity': 600, 'cap': 350, 'escape': 'spawn2', 'subtitle': 'EVERY ESCAPE = 2 MORE'} | Every ball that escapes spawns 2 more 😱
+2026-11-14 | 15_grow_circle | {'shape': 'circle', 'size': 450, 'spin': 0.2, 'gravity': 900, 'vmin': 700, 'wall': 'grow', 'grow_max': 0.95, 'note_on_bounce': True, 'hud': 'size', 'subtitle': 'IT GROWS EVERY BOUNCE'} | This ball grows every time it bounces 🎵
