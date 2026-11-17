@@ -4,3 +4,4 @@
 2026-11-14 | 15_grow_circle | {'shape': 'circle', 'size': 450, 'spin': 0.2, 'gravity': 900, 'vmin': 700, 'wall': 'grow', 'grow_max': 0.95, 'note_on_bounce': True, 'hud': 'size', 'subtitle': 'IT GROWS EVERY BOUNCE'} | This ball grows every time it bounces 🎵
 2026-11-15 | 27_plinko | {'mode': 'multi', 'start': 1, 'subtitle': '1 BALL → HOW MANY?'} | Plinko where every bin multiplies your balls 🎰
 2026-11-16 | 02_hexagon_x3 | {'shape': 6, 'size': 470, 'spin': 0.4, 'gravity': 800, 'cap': 400, 'holes': [{'orbit': 210, 'r': 62, 'effect': 'x3', 'w': 0.5}], 'subtitle': 'EVERY BALL BECOMES 3'} | Every ball becomes THREE inside this hexagon
+2026-11-17 | 12_rings | {'shape': 'circle', 'rings': 30, 'ring_in': 70, 'ring_out': 480, 'ring_gap': 0.7, 'gravity': 700, 'vmin': 600, 'hud': 'rings', 'subtitle': 'BREAK ALL 30 RINGS'} | Can 1 ball break 30 rings? 🎵
